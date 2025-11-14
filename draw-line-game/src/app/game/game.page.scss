@@ -3,22 +3,33 @@ ion-content {
   --padding-end: 0;
   --padding-top: 0;
   --padding-bottom: 0;
+  --overflow: hidden;
+  
+  // Ensure content fills the viewport
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .canvas-container {
   width: 100%;
   height: 100%;
+  min-height: 100%;
   display: block;
   background: white;
   overflow: hidden;
   position: relative;
+  flex: 1;
 }
 
 canvas {
   display: block;
   touch-action: none;
-  width: 100% !important;
-  height: 100% !important;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 
 .victory-animation {

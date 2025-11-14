@@ -70,6 +70,12 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   ngAfterViewInit() {
     if (!this.level) return;
 
+    console.log('=== Game Page Initialization ===');
+    console.log('Level loaded:', {
+      id: this.level.id,
+      name: this.level.name
+    });
+
     this.canvas = this.canvasRef.nativeElement;
     const context = this.canvas.getContext('2d');
     if (!context) {
@@ -78,26 +84,61 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     }
     this.ctx = context;
     
-    // Wait for content to be ready and layout to complete
-    // Use requestAnimationFrame to ensure DOM is fully rendered
-    requestAnimationFrame(() => {
-      // Double RAF to ensure layout is complete
-      requestAnimationFrame(() => {
-        this.setupCanvas();
-        
-        // Initialize physics engine
-        this.initPhysics();
-        
-        // Setup drawing
-        this.setupDrawing();
-        
-        // Setup collision detection
-        this.setupCollisionDetection();
-        
-        // Start render loop
-        this.startRenderLoop();
-      });
+    console.log('Canvas element obtained:', {
+      canvasExists: !!this.canvas,
+      contextExists: !!this.ctx,
+      initialWidth: this.canvas.width,
+      initialHeight: this.canvas.height
     });
+    
+    // Wait for content to be ready and layout to complete
+    // Use multiple delays to ensure ion-content is fully initialized
+    setTimeout(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          console.log('Starting canvas setup...');
+          this.setupCanvas();
+          
+          // Initialize physics engine
+          this.initPhysics();
+          
+          // Setup drawing
+          this.setupDrawing();
+          
+          // Setup collision detection
+          this.setupCollisionDetection();
+          
+          // Start render loop
+          this.startRenderLoop();
+          
+          // Setup ResizeObserver to watch for container size changes
+          this.setupResizeObserver();
+          
+          console.log('=== Game Page Initialization Complete ===');
+        });
+      });
+    }, 200);
+  }
+  
+  private setupResizeObserver(): void {
+    const container = this.canvas.parentElement;
+    if (!container) return;
+    
+    const resizeObserver = new ResizeObserver(() => {
+      // Debounce resize
+      clearTimeout((this as any).resizeTimeout);
+      (this as any).resizeTimeout = setTimeout(() => {
+        this.setupCanvas();
+        // Reinitialize physics if needed
+        if (this.level && this.engine) {
+          // Don't reinitialize physics on every resize, just update canvas
+          // this.initPhysics();
+        }
+      }, 100);
+    });
+    
+    resizeObserver.observe(container);
+    (this as any).resizeObserver = resizeObserver;
   }
   
   @HostListener('window:resize', ['$event'])
@@ -120,24 +161,127 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     if (this.engine) {
       Engine.clear(this.engine);
     }
+    if ((this as any).resizeObserver) {
+      (this as any).resizeObserver.disconnect();
+    }
+    if ((this as any).resizeTimeout) {
+      clearTimeout((this as any).resizeTimeout);
+    }
   }
 
   private setupCanvas(): void {
-    // Get actual container dimensions from ion-content
-    const container = this.canvas.parentElement;
-    if (!container) {
-      console.error('Canvas container not found');
-      return;
+    // Use viewport dimensions directly, accounting for header
+    // This is more reliable than getting container dimensions which may not be calculated yet
+    
+    console.log('=== Canvas Setup Start ===');
+    
+    // Get viewport dimensions
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // Get header height (ion-header with toolbar)
+    const header = document.querySelector('ion-header');
+    const headerRect = header ? header.getBoundingClientRect() : null;
+    const headerHeight = headerRect ? headerRect.height : 0;
+    
+    // Get ion-content element
+    const ionContent = document.querySelector('ion-content');
+    const ionContentRect = ionContent ? ionContent.getBoundingClientRect() : null;
+    
+    // Get canvas container
+    const container = this.canvas ? this.canvas.parentElement : null;
+    const containerRect = container ? container.getBoundingClientRect() : null;
+    
+    console.log('Viewport info:', {
+      innerWidth: viewportWidth,
+      innerHeight: viewportHeight,
+      outerWidth: window.outerWidth,
+      outerHeight: window.outerHeight,
+      screenWidth: screen.width,
+      screenHeight: screen.height,
+      devicePixelRatio: window.devicePixelRatio || 1
+    });
+    
+    console.log('Header info:', {
+      exists: !!header,
+      height: headerHeight,
+      rect: headerRect ? {
+        width: headerRect.width,
+        height: headerRect.height,
+        top: headerRect.top,
+        left: headerRect.left,
+        bottom: headerRect.bottom
+      } : 'null'
+    });
+    
+    console.log('ion-content info:', {
+      exists: !!ionContent,
+      rect: ionContentRect ? {
+        width: ionContentRect.width,
+        height: ionContentRect.height,
+        top: ionContentRect.top,
+        left: ionContentRect.left,
+        bottom: ionContentRect.bottom
+      } : 'null',
+      computedStyle: ionContent ? {
+        width: getComputedStyle(ionContent).width,
+        height: getComputedStyle(ionContent).height,
+        display: getComputedStyle(ionContent).display
+      } : 'null'
+    });
+    
+    console.log('Container info:', {
+      exists: !!container,
+      rect: containerRect ? {
+        width: containerRect.width,
+        height: containerRect.height,
+        top: containerRect.top,
+        left: containerRect.left,
+        bottom: containerRect.bottom
+      } : 'null',
+      computedStyle: container ? {
+        width: getComputedStyle(container).width,
+        height: getComputedStyle(container).height,
+        display: getComputedStyle(container).display
+      } : 'null'
+    });
+    
+    // Calculate available height (viewport minus header)
+    const availableHeight = viewportHeight - headerHeight;
+    
+    // Use viewport width and calculated available height
+    let displayWidth = viewportWidth;
+    let displayHeight = availableHeight;
+    
+    // If calculated height is too small (less than 400px), use fallback
+    if (displayHeight < 400) {
+      // iPhone 13 mini: 375 x 812 (CSS pixels)
+      // But we want full viewport height minus header
+      displayHeight = viewportHeight - (headerHeight || 56);
+      console.warn('Height too small, using adjusted value:', displayHeight);
     }
     
-    // Get the actual visible dimensions of the container
-    const rect = container.getBoundingClientRect();
-    const displayWidth = rect.width;
-    const displayHeight = rect.height;
+    console.log('Canvas setup calculation:', {
+      viewport: `${viewportWidth}x${viewportHeight}`,
+      headerHeight: headerHeight,
+      availableHeight: availableHeight,
+      finalWidth: displayWidth,
+      finalHeight: displayHeight,
+      heightRatio: (displayHeight / viewportHeight * 100).toFixed(1) + '%'
+    });
     
-    // Fallback to window dimensions if container has no size
-    const finalWidth = displayWidth > 0 ? displayWidth : window.innerWidth;
-    const finalHeight = displayHeight > 0 ? displayHeight : window.innerHeight;
+    this.updateCanvasSize(displayWidth, displayHeight);
+    console.log('=== Canvas Setup End ===');
+  }
+  
+  private updateCanvasSize(displayWidth: number, displayHeight: number): void {
+    // Fallback to iPhone 13 mini dimensions if container has no size
+    // iPhone 13 mini: 375 x 812 (CSS pixels)
+    const IPHONE_13_MINI_WIDTH = 375;
+    const IPHONE_13_MINI_HEIGHT = 812;
+    
+    const finalWidth = displayWidth > 0 ? displayWidth : IPHONE_13_MINI_WIDTH;
+    const finalHeight = displayHeight > 0 ? displayHeight : IPHONE_13_MINI_HEIGHT;
     
     // Set display size for high DPI screens
     const dpr = window.devicePixelRatio || 1;
@@ -155,10 +299,76 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     
     // Apply DPR scale
     this.ctx.scale(dpr, dpr);
+    
+    // Get container info
+    const container = this.canvas.parentElement;
+    const containerRect = container ? container.getBoundingClientRect() : null;
+    
+    console.log('=== Canvas Size Updated ===');
+    console.log('Input dimensions:', {
+      displayWidth: displayWidth,
+      displayHeight: displayHeight,
+      fallbackUsed: displayWidth === 0 || displayHeight === 0
+    });
+    console.log('Final dimensions:', {
+      cssWidth: finalWidth,
+      cssHeight: finalHeight,
+      internalWidth: this.canvas.width,
+      internalHeight: this.canvas.height,
+      dpr: dpr
+    });
+    console.log('Canvas element:', {
+      styleWidth: this.canvas.style.width,
+      styleHeight: this.canvas.style.height,
+      width: this.canvas.width,
+      height: this.canvas.height,
+      clientWidth: this.canvas.clientWidth,
+      clientHeight: this.canvas.clientHeight,
+      offsetWidth: this.canvas.offsetWidth,
+      offsetHeight: this.canvas.offsetHeight
+    });
+    console.log('Container info:', {
+      containerRect: containerRect ? {
+        width: containerRect.width,
+        height: containerRect.height,
+        top: containerRect.top,
+        left: containerRect.left
+      } : 'null',
+      containerStyle: container ? {
+        width: getComputedStyle(container).width,
+        height: getComputedStyle(container).height
+      } : 'null'
+    });
+    console.log('========================');
   }
 
   private initPhysics(): void {
     if (!this.level) return;
+
+    console.log('=== Physics Engine Initialization ===');
+    console.log('Level data:', {
+      id: this.level.id,
+      name: this.level.name,
+      levelWidth: this.level.width,
+      levelHeight: this.level.height,
+      blueBall: {
+        x: this.level.blueBall.x,
+        y: this.level.blueBall.y,
+        radius: this.level.blueBall.radius
+      },
+      orangeBall: {
+        x: this.level.orangeBall.x,
+        y: this.level.orangeBall.y,
+        radius: this.level.orangeBall.radius
+      },
+      staticBodies: this.level.staticBodies.map((body, index) => ({
+        index: index,
+        x: body.x,
+        y: body.y,
+        width: body.width,
+        height: body.height
+      }))
+    });
 
     // Create engine
     this.engine = Engine.create();
@@ -169,55 +379,173 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     const logicalWidth = this.canvas.width / (window.devicePixelRatio || 1);
     const logicalHeight = this.canvas.height / (window.devicePixelRatio || 1);
     
+    console.log('Canvas logical dimensions:', {
+      logicalWidth: logicalWidth,
+      logicalHeight: logicalHeight,
+      canvasWidth: this.canvas.width,
+      canvasHeight: this.canvas.height,
+      dpr: window.devicePixelRatio || 1
+    });
+    
     // Scale to match level dimensions
+    // Use scaleX to fit width, then check if height is sufficient
     const scaleX = logicalWidth / this.level.width;
     const scaleY = logicalHeight / this.level.height;
-    const scale = Math.min(scaleX, scaleY);
+    
+    // Use scaleX to ensure width fits, height can be larger (content will be centered)
+    // This prevents height from being compressed
+    const scale = scaleX;
+    
+    // Calculate actual used height with this scale
+    const scaledLevelHeight = this.level.height * scale;
+    const heightOffset = scaledLevelHeight < logicalHeight ? (logicalHeight - scaledLevelHeight) / 2 : 0;
+
+    console.log('Scaling calculation:', {
+      scaleX: scaleX,
+      scaleY: scaleY,
+      finalScale: scale,
+      levelWidth: this.level.width,
+      levelHeight: this.level.height,
+      scaledLevelWidth: this.level.width * scale,
+      scaledLevelHeight: scaledLevelHeight,
+      logicalWidth: logicalWidth,
+      logicalHeight: logicalHeight,
+      heightOffset: heightOffset,
+      willFit: scaledLevelHeight <= logicalHeight
+    });
+    
+    // Store height offset for rendering
+    (this as any).heightOffset = heightOffset;
 
     // Create static bodies (ground and platforms)
-    this.level.staticBodies.forEach(staticBody => {
+    const staticBodiesInfo: any[] = [];
+    this.level.staticBodies.forEach((staticBody, index) => {
+      const scaledX = staticBody.x * scale;
+      const scaledY = staticBody.y * scale + heightOffset; // Apply height offset for centering
+      const scaledWidth = staticBody.width * scale;
+      const scaledHeight = staticBody.height * scale;
+      
       const body = Bodies.rectangle(
-        staticBody.x * scale,
-        staticBody.y * scale,
-        staticBody.width * scale,
-        staticBody.height * scale,
+        scaledX,
+        scaledY,
+        scaledWidth,
+        scaledHeight,
         { isStatic: true, render: { fillStyle: '#666666' } }
       );
       World.add(this.world, body);
+      
+      staticBodiesInfo.push({
+        index: index,
+        original: {
+          x: staticBody.x,
+          y: staticBody.y,
+          width: staticBody.width,
+          height: staticBody.height
+        },
+        scaled: {
+          x: scaledX,
+          y: scaledY,
+          width: scaledWidth,
+          height: scaledHeight
+        },
+        bodyId: body.id
+      });
     });
 
+    console.log('Static bodies created:', staticBodiesInfo);
+
     // Create blue ball - optimized physics properties based on reference
+    const blueBallOriginalX = this.level.blueBall.x;
+    const blueBallOriginalY = this.level.blueBall.y;
+    const blueBallOriginalRadius = this.level.blueBall.radius;
+    const blueBallScaledX = blueBallOriginalX * scale;
+    const blueBallScaledY = blueBallOriginalY * scale + heightOffset; // Apply height offset for centering
+    const blueBallScaledRadius = blueBallOriginalRadius * scale;
+    
     this.blueBall = Bodies.circle(
-      this.level.blueBall.x * scale,
-      this.level.blueBall.y * scale,
-      this.level.blueBall.radius * scale,
+      blueBallScaledX,
+      blueBallScaledY,
+      blueBallScaledRadius,
       { 
         render: { fillStyle: '#4285f4' },
         frictionAir: 0.01,
-        friction: 0.8,  // Increased friction for better rolling
-        restitution: 0.5,  // Better bounce
-        density: 1.0  // More realistic density
+        friction: 0.8,
+        restitution: 0.5,
+        density: 1.0
       }
     );
     World.add(this.world, this.blueBall);
 
+    console.log('Blue ball created:', {
+      original: {
+        x: blueBallOriginalX,
+        y: blueBallOriginalY,
+        radius: blueBallOriginalRadius
+      },
+      scaled: {
+        x: blueBallScaledX,
+        y: blueBallScaledY,
+        radius: blueBallScaledRadius
+      },
+      bodyId: this.blueBall.id,
+      position: {
+        x: this.blueBall.position.x,
+        y: this.blueBall.position.y
+      },
+      circleRadius: (this.blueBall as any).circleRadius
+    });
+
     // Create orange ball - optimized physics properties based on reference
+    const orangeBallOriginalX = this.level.orangeBall.x;
+    const orangeBallOriginalY = this.level.orangeBall.y;
+    const orangeBallOriginalRadius = this.level.orangeBall.radius;
+    const orangeBallScaledX = orangeBallOriginalX * scale;
+    const orangeBallScaledY = orangeBallOriginalY * scale + heightOffset; // Apply height offset for centering
+    const orangeBallScaledRadius = orangeBallOriginalRadius * scale;
+    
     this.orangeBall = Bodies.circle(
-      this.level.orangeBall.x * scale,
-      this.level.orangeBall.y * scale,
-      this.level.orangeBall.radius * scale,
+      orangeBallScaledX,
+      orangeBallScaledY,
+      orangeBallScaledRadius,
       { 
         render: { fillStyle: '#ff9800' },
         frictionAir: 0.01,
-        friction: 0.8,  // Increased friction for better rolling
-        restitution: 0.5,  // Better bounce
-        density: 1.0  // More realistic density
+        friction: 0.8,
+        restitution: 0.5,
+        density: 1.0
       }
     );
     World.add(this.world, this.orangeBall);
 
+    console.log('Orange ball created:', {
+      original: {
+        x: orangeBallOriginalX,
+        y: orangeBallOriginalY,
+        radius: orangeBallOriginalRadius
+      },
+      scaled: {
+        x: orangeBallScaledX,
+        y: orangeBallScaledY,
+        radius: orangeBallScaledRadius
+      },
+      bodyId: this.orangeBall.id,
+      position: {
+        x: this.orangeBall.position.x,
+        y: this.orangeBall.position.y
+      },
+      circleRadius: (this.orangeBall as any).circleRadius
+    });
+
     // Store scale for later use
     (this as any).scale = scale;
+
+    console.log('Physics world summary:', {
+      totalBodies: Composite.allBodies(this.world).length,
+      staticBodies: Composite.allBodies(this.world).filter((b: any) => b.isStatic).length,
+      dynamicBodies: Composite.allBodies(this.world).filter((b: any) => !b.isStatic).length,
+      gravity: this.engine.world.gravity.y
+    });
+    console.log('=====================================');
   }
 
   private setupDrawing(): void {
@@ -673,16 +1001,17 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     // Reset balls to initial positions
     if (this.level) {
       const scale = (this as any).scale || 1;
+      const heightOffset = (this as any).heightOffset || 0;
       Body.setPosition(this.blueBall, {
         x: this.level.blueBall.x * scale,
-        y: this.level.blueBall.y * scale
+        y: this.level.blueBall.y * scale + heightOffset
       });
       Body.setVelocity(this.blueBall, { x: 0, y: 0 });
       Body.setAngle(this.blueBall, 0);
       
       Body.setPosition(this.orangeBall, {
         x: this.level.orangeBall.x * scale,
-        y: this.level.orangeBall.y * scale
+        y: this.level.orangeBall.y * scale + heightOffset
       });
       Body.setVelocity(this.orangeBall, { x: 0, y: 0 });
       Body.setAngle(this.orangeBall, 0);
