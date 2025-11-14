@@ -3,7 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { LevelsService } from '../services/levels.service';
 import { ProgressService } from '../services/progress.service';
 import { Level } from '../models/level.model';
-import { Engine, World, Bodies, Body, Events, Composite, Constraint } from 'matter-js';
+import { Engine, World, Bodies, Body, Events, Composite } from 'matter-js';
 
 interface Point {
   x: number;
@@ -32,7 +32,6 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   private blueBall!: Body;
   private orangeBall!: Body;
   private lineSegments: Body[] = [];
-  private lineConstraints: Constraint[] = [];
   
   private isDrawing: boolean = false;
   private drawingPoints: Point[] = [];
@@ -231,39 +230,19 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
 
     const scale = (this as any).scale || 1;
     
-    // Filter out points that are too close together
-    const filteredPoints: Point[] = [this.drawingPoints[0]];
-    for (let i = 1; i < this.drawingPoints.length; i++) {
-      const lastPoint = filteredPoints[filteredPoints.length - 1];
-      const currentPoint = this.drawingPoints[i];
-      const distance = Math.sqrt(
-        Math.pow(currentPoint.x - lastPoint.x, 2) + 
-        Math.pow(currentPoint.y - lastPoint.y, 2)
-      );
-      
-      // Only keep points that are at least MIN_SEGMENT_LENGTH apart
-      if (distance >= this.MIN_SEGMENT_LENGTH) {
-        filteredPoints.push(currentPoint);
-      }
-    }
+    // Simplify points to reduce segment count and create smoother lines
+    const simplifiedPoints = this.simplifyPoints(this.drawingPoints, 10); // 10px tolerance
     
-    if (filteredPoints.length < 2) return;
-    
-    // Create segments and connect them with constraints for continuous line
-    const newSegments: Body[] = [];
-    const newConstraints: Constraint[] = [];
-    
-    for (let i = 0; i < filteredPoints.length - 1; i++) {
-      if (this.lineSegments.length + newSegments.length >= this.MAX_SEGMENTS) break;
-      
-      const p1 = filteredPoints[i];
-      const p2 = filteredPoints[i + 1];
+    for (let i = 0; i < simplifiedPoints.length - 1; i++) {
+      const p1 = simplifiedPoints[i];
+      const p2 = simplifiedPoints[i + 1];
       
       const dx = p2.x - p1.x;
       const dy = p2.y - p1.y;
       const length = Math.sqrt(dx * dx + dy * dy);
       
       if (length < this.MIN_SEGMENT_LENGTH) continue;
+      if (this.lineSegments.length >= this.MAX_SEGMENTS) break;
       
       const midX = (p1.x + p2.x) / 2;
       const midY = (p1.y + p2.y) / 2;
@@ -285,44 +264,46 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
       );
       
       World.add(this.world, segment);
-      newSegments.push(segment);
+      this.lineSegments.push(segment);
+    }
+  }
+  
+  // Simplify polyline to create smoother lines with fewer segments
+  private simplifyPoints(points: Point[], tolerance: number): Point[] {
+    if (points.length <= 2) return points;
+    
+    const simplified: Point[] = [points[0]];
+    let lastKeptIndex = 0;
+    
+    for (let i = 1; i < points.length - 1; i++) {
+      const lastKept = points[lastKeptIndex];
+      const curr = points[i];
+      const next = points[i + 1];
       
-      // Connect this segment to the previous one if it exists
-      if (newSegments.length > 1) {
-        const prevSegment = newSegments[newSegments.length - 2];
-        const prevP1 = filteredPoints[i - 1];
-        const prevP2 = filteredPoints[i];
-        const prevLength = Math.sqrt(
-          Math.pow(prevP2.x - prevP1.x, 2) + 
-          Math.pow(prevP2.y - prevP1.y, 2)
-        );
-        
-        // Calculate connection points in local coordinates
-        // Right end of previous segment (in its local space, rotated)
-        // Since the segment is rotated, in local space it's horizontal
-        const prevEndX = prevLength / 2;
-        const prevEndY = 0;
-        
-        // Left end of current segment (in its local space)
-        const currStartX = -length / 2;
-        const currStartY = 0;
-        
-        const constraint = Constraint.create({
-          bodyA: prevSegment,
-          bodyB: segment,
-          pointA: { x: prevEndX, y: prevEndY },
-          pointB: { x: currStartX, y: currStartY },
-          stiffness: 1,
-          length: 0
-        });
-        World.add(this.world, constraint);
-        newConstraints.push(constraint);
+      // Calculate distance from current point to line between last kept and next
+      const dx = next.x - lastKept.x;
+      const dy = next.y - lastKept.y;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      
+      if (length === 0) {
+        simplified.push(curr);
+        lastKeptIndex = i;
+        continue;
+      }
+      
+      const distance = Math.abs(
+        (dy * curr.x - dx * curr.y + next.x * lastKept.y - next.y * lastKept.x) / length
+      );
+      
+      // Only keep point if it's far enough from the line
+      if (distance > tolerance) {
+        simplified.push(curr);
+        lastKeptIndex = i;
       }
     }
     
-    // Add all new segments and constraints to our tracking arrays
-    this.lineSegments.push(...newSegments);
-    this.lineConstraints.push(...newConstraints);
+    simplified.push(points[points.length - 1]);
+    return simplified;
   }
 
   private setupCollisionDetection(): void {
@@ -475,12 +456,6 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   restart(): void {
-    // Remove all line constraints
-    this.lineConstraints.forEach(constraint => {
-      World.remove(this.world, constraint);
-    });
-    this.lineConstraints = [];
-    
     // Remove all line segments
     this.lineSegments.forEach(segment => {
       World.remove(this.world, segment);
