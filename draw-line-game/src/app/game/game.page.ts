@@ -23,6 +23,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   levelName: string = '';
   levelComplete: boolean = false;
   hasNextLevel: boolean = false;
+  showVictoryAnimation: boolean = false;
 
   private engine!: Engine;
   private world!: World;
@@ -31,7 +32,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   
   private blueBall!: Body;
   private orangeBall!: Body;
-  private lineSegments: Body[] = []; // Store compound bodies (one per stroke)
+  private lineSegments: Body[] = [];
   
   private isDrawing: boolean = false;
   private drawingPoints: Point[] = [];
@@ -144,7 +145,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
       World.add(this.world, body);
     });
 
-    // Create blue ball
+    // Create blue ball - optimized physics properties based on reference
     this.blueBall = Bodies.circle(
       this.level.blueBall.x * scale,
       this.level.blueBall.y * scale,
@@ -152,15 +153,14 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
       { 
         render: { fillStyle: '#4285f4' },
         frictionAir: 0.01,
-        friction: 0.1,
-        restitution: 0.3,
-        density: 0.001
-        // Don't set inertia - let Matter.js calculate it for proper rotation
+        friction: 0.8,  // Increased friction for better rolling
+        restitution: 0.5,  // Better bounce
+        density: 1.0  // More realistic density
       }
     );
     World.add(this.world, this.blueBall);
 
-    // Create orange ball
+    // Create orange ball - optimized physics properties based on reference
     this.orangeBall = Bodies.circle(
       this.level.orangeBall.x * scale,
       this.level.orangeBall.y * scale,
@@ -168,10 +168,9 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
       { 
         render: { fillStyle: '#ff9800' },
         frictionAir: 0.01,
-        friction: 0.1,
-        restitution: 0.3,
-        density: 0.001
-        // Don't set inertia - let Matter.js calculate it for proper rotation
+        friction: 0.8,  // Increased friction for better rolling
+        restitution: 0.5,  // Better bounce
+        density: 1.0  // More realistic density
       }
     );
     World.add(this.world, this.orangeBall);
@@ -228,17 +227,153 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     if (this.drawingPoints.length < 2) return;
     if (this.lineSegments.length >= this.MAX_SEGMENTS) return;
 
-    const scale = (this as any).scale || 1;
+    // Simplify and optimize points
+    const simplifiedPoints = this.simplifyPoints(this.drawingPoints, 8);
+    if (simplifiedPoints.length < 2) return;
     
-    // Simplify points to reduce segment count and create smoother lines
-    const simplifiedPoints = this.simplifyPoints(this.drawingPoints, 10); // 10px tolerance
+    // Remove duplicate points that are too close
+    const cleanedPoints = this.removeClosePoints(simplifiedPoints, 5.5);
+    if (cleanedPoints.length < 2) return;
     
-    // Create all segments for this stroke
-    const segmentParts: Body[] = [];
+    // Create smooth polygon from line points
+    const polygonPoints = this.createPolygonFromLine(cleanedPoints, this.SEGMENT_THICKNESS / 2);
     
-    for (let i = 0; i < simplifiedPoints.length - 1; i++) {
-      const p1 = simplifiedPoints[i];
-      const p2 = simplifiedPoints[i + 1];
+    if (polygonPoints.length >= 3) {
+      // Convert Point[] to {x, y}[]
+      const vertices = polygonPoints.map(p => ({ x: p.x, y: p.y }));
+      
+      try {
+        // Create a single polygon body for smoother lines
+        const segment = Bodies.fromVertices(
+          polygonPoints[0].x,
+          polygonPoints[0].y,
+          [vertices],
+          {
+            render: { fillStyle: '#333333' },
+            frictionAir: 0.01,
+            friction: 0.8,
+            restitution: 0.3,
+            density: 1.0
+          },
+          true // flagInternal for better performance
+        );
+        
+        if (segment) {
+          // Bodies.fromVertices may return a single Body or array of Bodies
+          const segments = Array.isArray(segment) ? segment : [segment];
+          
+          if (segments.length > 0) {
+            segments.forEach((part: Body) => {
+              World.add(this.world, part);
+              this.lineSegments.push(part);
+            });
+          } else {
+            // Fallback to rectangle segments if polygon creation fails
+            this.createRectangleSegments(cleanedPoints);
+          }
+        } else {
+          // Fallback to rectangle segments if polygon creation fails
+          this.createRectangleSegments(cleanedPoints);
+        }
+      } catch (e) {
+        // Fallback to rectangle segments if polygon creation fails
+        this.createRectangleSegments(cleanedPoints);
+      }
+    } else {
+      // Fallback to rectangle segments if polygon creation fails
+      this.createRectangleSegments(cleanedPoints);
+    }
+  }
+  
+  // Create polygon outline from line points (inspired by reference code)
+  private createPolygonFromLine(points: Point[], thickness: number): Point[] {
+    if (points.length < 2) return [];
+    
+    const topPoints: Point[] = [];
+    const bottomPoints: Point[] = [];
+    
+    // Determine initial direction
+    const firstDx = points[1].x - points[0].x;
+    const isRight = firstDx > 0;
+    
+    for (let i = 0; i < points.length - 1; i++) {
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      
+      if (length < 0.1) continue;
+      
+      const perpX = -dy / length;
+      const perpY = dx / length;
+      
+      const topX = p2.x + perpX * thickness;
+      const topY = p2.y + perpY * thickness;
+      const bottomX = p2.x - perpX * thickness;
+      const bottomY = p2.y - perpY * thickness;
+      
+      topPoints.push({ x: topX, y: topY });
+      bottomPoints.push({ x: bottomX, y: bottomY });
+    }
+    
+    // Add first point offset
+    if (points.length > 0) {
+      const firstDx = points.length > 1 ? points[1].x - points[0].x : 1;
+      const firstDy = points.length > 1 ? points[1].y - points[0].y : 0;
+      const firstLength = Math.sqrt(firstDx * firstDx + firstDy * firstDy);
+      
+      if (firstLength > 0.1) {
+        const perpX = -firstDy / firstLength;
+        const perpY = firstDx / firstLength;
+        
+        topPoints.unshift({
+          x: points[0].x + perpX * thickness,
+          y: points[0].y + perpY * thickness
+        });
+        bottomPoints.unshift({
+          x: points[0].x - perpX * thickness,
+          y: points[0].y - perpY * thickness
+        });
+      }
+    }
+    
+    // Reverse bottom points and combine
+    bottomPoints.reverse();
+    return topPoints.concat(bottomPoints);
+  }
+  
+  // Remove points that are too close to each other
+  private removeClosePoints(points: Point[], minDistance: number): Point[] {
+    if (points.length <= 1) return points;
+    
+    const result: Point[] = [points[0]];
+    
+    for (let i = 1; i < points.length; i++) {
+      const lastPoint = result[result.length - 1];
+      const currentPoint = points[i];
+      
+      const distance = Math.sqrt(
+        Math.pow(currentPoint.x - lastPoint.x, 2) +
+        Math.pow(currentPoint.y - lastPoint.y, 2)
+      );
+      
+      if (distance >= minDistance) {
+        result.push(currentPoint);
+      }
+    }
+    
+    return result;
+  }
+  
+  // Fallback method: create rectangle segments
+  private createRectangleSegments(points: Point[]): void {
+    for (let i = 0; i < points.length - 1; i++) {
+      if (this.lineSegments.length >= this.MAX_SEGMENTS) break;
+      
+      const p1 = points[i];
+      const p2 = points[i + 1];
       
       const dx = p2.x - p1.x;
       const dy = p2.y - p1.y;
@@ -259,28 +394,14 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
           angle: angle,
           render: { fillStyle: '#333333' },
           frictionAir: 0.01,
-          friction: 0.3,
-          restitution: 0.2,
-          density: 0.001
+          friction: 0.8,
+          restitution: 0.3,
+          density: 1.0
         }
       );
       
-      segmentParts.push(segment);
-    }
-    
-    // If we have segments, create a compound body to keep them together
-    if (segmentParts.length > 0) {
-      // Create a compound body from all segments
-      const compoundBody = Body.create({
-        parts: segmentParts,
-        frictionAir: 0.01,
-        friction: 0.3,
-        restitution: 0.2,
-        density: 0.001
-      });
-      
-      World.add(this.world, compoundBody);
-      this.lineSegments.push(compoundBody);
+      World.add(this.world, segment);
+      this.lineSegments.push(segment);
     }
   }
   
@@ -341,10 +462,16 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     if (this.levelComplete) return;
     
     this.levelComplete = true;
+    this.showVictoryAnimation = true;
     
     if (this.level) {
       this.progressService.completeLevel(this.level.id);
     }
+    
+    // Hide animation after delay
+    setTimeout(() => {
+      this.showVictoryAnimation = false;
+    }, 2000);
   }
 
   private startRenderLoop(): void {
@@ -396,27 +523,40 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
       const isCircle = body === this.blueBall || body === this.orangeBall;
       
       if (isCircle) {
-        // Draw circle - calculate radius from vertices
+        // Draw circle with shadow for depth
         const vertices = body.vertices;
         let radius = 0;
         if (vertices && vertices.length > 0) {
-          // Calculate radius from first vertex distance
           radius = Math.sqrt(
             Math.pow(vertices[0].x - body.position.x, 2) + 
             Math.pow(vertices[0].y - body.position.y, 2)
           );
         } else {
-          // Fallback: try circleRadius property
           radius = (body as any).circleRadius || 20;
         }
         
+        // Draw shadow
+        this.ctx.save();
+        this.ctx.shadowBlur = 4;
+        this.ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+        this.ctx.shadowOffsetX = 2;
+        this.ctx.shadowOffsetY = 2;
+        
+        // Draw circle
         this.ctx.beginPath();
         this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
         this.ctx.fillStyle = (body as any).render?.fillStyle || '#333';
         this.ctx.fill();
+        
+        // Draw highlight
+        this.ctx.beginPath();
+        this.ctx.arc(-radius * 0.3, -radius * 0.3, radius * 0.4, 0, Math.PI * 2);
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        this.ctx.fill();
+        
+        this.ctx.restore();
       } else {
-        // Draw polygon (rectangle, compound body, or other shapes)
-        // For compound bodies, Matter.js merges all parts' vertices into body.vertices
+        // Draw polygon (rectangle or other shapes) with smooth edges
         const vertices = body.vertices;
         if (vertices && vertices.length > 0) {
           this.ctx.beginPath();
@@ -425,11 +565,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
             this.ctx.lineTo(vertices[i].x - body.position.x, vertices[i].y - body.position.y);
           }
           this.ctx.closePath();
-          // Use the first part's render style if available, or default
-          const fillStyle = (body as any).render?.fillStyle || 
-                           (body.parts && body.parts.length > 1 && body.parts[1]?.render?.fillStyle) || 
-                           '#333333';
-          this.ctx.fillStyle = fillStyle;
+          this.ctx.fillStyle = (body as any).render?.fillStyle || '#333';
           this.ctx.fill();
         }
       }
@@ -463,10 +599,19 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   private drawCurrentLine(): void {
     if (this.drawingPoints.length < 2) return;
     
-    this.ctx.strokeStyle = '#666666';
+    // Draw smooth line with shadow
+    this.ctx.save();
+    this.ctx.shadowBlur = 3;
+    this.ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+    this.ctx.shadowOffsetX = 1;
+    this.ctx.shadowOffsetY = 1;
+    
+    this.ctx.strokeStyle = '#333333';
     this.ctx.lineWidth = this.SEGMENT_THICKNESS;
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
+    this.ctx.lineJoin = 'miter';
+    this.ctx.miterLimit = 2;
     
     this.ctx.beginPath();
     this.ctx.moveTo(this.drawingPoints[0].x, this.drawingPoints[0].y);
@@ -474,6 +619,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
       this.ctx.lineTo(this.drawingPoints[i].x, this.drawingPoints[i].y);
     }
     this.ctx.stroke();
+    this.ctx.restore();
   }
 
   restart(): void {
@@ -502,6 +648,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     }
     
     this.levelComplete = false;
+    this.showVictoryAnimation = false;
   }
 
   closeOverlay(): void {

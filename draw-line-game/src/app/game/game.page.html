@@ -17,13 +17,26 @@
     <canvas #gameCanvas></canvas>
   </div>
 
+  <!-- Victory Animation -->
+  <div class="victory-animation" *ngIf="showVictoryAnimation">
+    <div class="victory-text">🎉</div>
+  </div>
+
   <!-- Level Complete Overlay -->
   <div class="overlay" *ngIf="levelComplete" (click)="closeOverlay()">
     <div class="overlay-content" (click)="$event.stopPropagation()">
+      <div class="victory-icon">✓</div>
       <h2>关卡完成！</h2>
+      <p class="victory-message">恭喜你完成了这一关！</p>
       <div class="overlay-buttons">
-        <ion-button (click)="nextLevel()" *ngIf="hasNextLevel">下一关</ion-button>
-        <ion-button (click)="goHome()">返回</ion-button>
+        <ion-button (click)="nextLevel()" *ngIf="hasNextLevel" class="button-primary">
+          <ion-icon name="arrow-forward" slot="start"></ion-icon>
+          下一关
+        </ion-button>
+        <ion-button (click)="goHome()" class="button-secondary">
+          <ion-icon name="home" slot="start"></ion-icon>
+          返回
+        </ion-button>
       </div>
     </div>
   </div>

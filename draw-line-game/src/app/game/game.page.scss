@@ -13,36 +13,154 @@ canvas {
   touch-action: none;
 }
 
+.victory-animation {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2000;
+  pointer-events: none;
+  animation: victoryPop 0.6s ease-out;
+}
+
+.victory-text {
+  font-size: 80px;
+  text-align: center;
+  animation: victorySpin 0.6s ease-out;
+}
+
+@keyframes victoryPop {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.8;
+  }
+}
+
+@keyframes victorySpin {
+  0% {
+    transform: rotate(0deg) scale(0);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.2);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
 .overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.75);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .overlay-content {
-  background: white;
-  padding: 32px;
-  border-radius: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 40px 32px;
+  border-radius: 24px;
   text-align: center;
-  min-width: 280px;
+  min-width: 300px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.4s ease-out;
+  color: white;
 
   h2 {
-    margin: 0 0 24px 0;
-    color: #333;
-    font-size: 24px;
+    margin: 16px 0 8px 0;
+    color: white;
+    font-size: 28px;
+    font-weight: bold;
   }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.victory-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 16px;
+  background: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  color: #4caf50;
+  animation: iconPop 0.5s ease-out 0.2s both;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+@keyframes iconPop {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.victory-message {
+  margin: 0 0 24px 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
 }
 
 .overlay-buttons {
   display: flex;
-  gap: 16px;
+  gap: 12px;
   justify-content: center;
+  flex-wrap: wrap;
+}
+
+.button-primary {
+  --background: white;
+  --color: #667eea;
+  --border-radius: 12px;
+  font-weight: 600;
+  text-transform: none;
+}
+
+.button-secondary {
+  --background: rgba(255, 255, 255, 0.2);
+  --color: white;
+  --border-radius: 12px;
+  font-weight: 600;
+  text-transform: none;
 }
 
