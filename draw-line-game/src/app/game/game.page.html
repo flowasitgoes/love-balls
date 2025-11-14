@@ -1,0 +1,30 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/home"></ion-back-button>
+    </ion-buttons>
+    <ion-title>{{ levelName }}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="restart()">
+        <ion-icon name="refresh"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <div class="canvas-container">
+    <canvas #gameCanvas></canvas>
+  </div>
+
+  <!-- Level Complete Overlay -->
+  <div class="overlay" *ngIf="levelComplete" (click)="closeOverlay()">
+    <div class="overlay-content" (click)="$event.stopPropagation()">
+      <h2>关卡完成！</h2>
+      <div class="overlay-buttons">
+        <ion-button (click)="nextLevel()" *ngIf="hasNextLevel">下一关</ion-button>
+        <ion-button (click)="goHome()">返回</ion-button>
+      </div>
+    </div>
+  </div>
+</ion-content>

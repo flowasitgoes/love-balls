@@ -1,0 +1,7 @@
+{
+  "name": "draw-line-game",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular"
+}

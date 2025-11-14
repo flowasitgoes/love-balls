@@ -1,0 +1,35 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-title>
+      画线连接球
+    </ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <ion-header collapse="condense">
+    <ion-toolbar>
+      <ion-title size="large">画线连接球</ion-title>
+    </ion-toolbar>
+  </ion-header>
+
+  <div class="levels-container">
+    <ion-grid>
+      <ion-row>
+        <ion-col size="6" size-md="4" size-lg="3" *ngFor="let level of levels">
+          <ion-card class="level-card" (click)="startLevel(level.id)">
+            <div class="level-thumbnail">
+              <div class="level-number">{{ level.id }}</div>
+              <div class="level-name">{{ level.name }}</div>
+              <ion-icon 
+                *ngIf="isLevelCompleted(level.id)" 
+                name="checkmark-circle" 
+                class="completed-icon">
+              </ion-icon>
+            </div>
+          </ion-card>
+        </ion-col>
+      </ion-row>
+    </ion-grid>
+  </div>
+</ion-content>
