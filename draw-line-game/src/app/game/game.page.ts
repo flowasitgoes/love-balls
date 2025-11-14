@@ -247,18 +247,19 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     });
     
     // Calculate available height (viewport minus header)
-    const availableHeight = viewportHeight - headerHeight;
+    // Since header might be translucent, we can use slightly more height
+    // Reduce header height deduction by a small amount to maximize canvas space
+    const headerDeduction = Math.max(headerHeight - 4, 0); // Reduce by 4px to get more height
+    const availableHeight = viewportHeight - headerDeduction;
     
     // Use viewport width and calculated available height
     let displayWidth = viewportWidth;
     let displayHeight = availableHeight;
     
-    // If calculated height is too small (less than 400px), use fallback
+    // If calculated height is too small, use viewport height directly (header might be translucent)
     if (displayHeight < 400) {
-      // iPhone 13 mini: 375 x 812 (CSS pixels)
-      // But we want full viewport height minus header
-      displayHeight = viewportHeight - (headerHeight || 56);
-      console.warn('Height too small, using adjusted value:', displayHeight);
+      displayHeight = viewportHeight;
+      console.warn('Height too small, using full viewport height:', displayHeight);
     }
     
     console.log('Canvas setup calculation:', {
@@ -275,13 +276,9 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   }
   
   private updateCanvasSize(displayWidth: number, displayHeight: number): void {
-    // Fallback to iPhone 13 mini dimensions if container has no size
-    // iPhone 13 mini: 375 x 812 (CSS pixels)
-    const IPHONE_13_MINI_WIDTH = 375;
-    const IPHONE_13_MINI_HEIGHT = 812;
-    
-    const finalWidth = displayWidth > 0 ? displayWidth : IPHONE_13_MINI_WIDTH;
-    const finalHeight = displayHeight > 0 ? displayHeight : IPHONE_13_MINI_HEIGHT;
+    // Use provided dimensions, or fallback to viewport if invalid
+    const finalWidth = displayWidth > 0 ? displayWidth : window.innerWidth;
+    const finalHeight = displayHeight > 0 ? displayHeight : window.innerHeight;
     
     // Set display size for high DPI screens
     const dpr = window.devicePixelRatio || 1;
