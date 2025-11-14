@@ -31,7 +31,7 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   
   private blueBall!: Body;
   private orangeBall!: Body;
-  private lineSegments: Body[] = [];
+  private lineSegments: Body[] = []; // Store compound bodies (one per stroke)
   
   private isDrawing: boolean = false;
   private drawingPoints: Point[] = [];
@@ -233,6 +233,9 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     // Simplify points to reduce segment count and create smoother lines
     const simplifiedPoints = this.simplifyPoints(this.drawingPoints, 10); // 10px tolerance
     
+    // Create all segments for this stroke
+    const segmentParts: Body[] = [];
+    
     for (let i = 0; i < simplifiedPoints.length - 1; i++) {
       const p1 = simplifiedPoints[i];
       const p2 = simplifiedPoints[i + 1];
@@ -242,7 +245,6 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
       const length = Math.sqrt(dx * dx + dy * dy);
       
       if (length < this.MIN_SEGMENT_LENGTH) continue;
-      if (this.lineSegments.length >= this.MAX_SEGMENTS) break;
       
       const midX = (p1.x + p2.x) / 2;
       const midY = (p1.y + p2.y) / 2;
@@ -263,8 +265,22 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
         }
       );
       
-      World.add(this.world, segment);
-      this.lineSegments.push(segment);
+      segmentParts.push(segment);
+    }
+    
+    // If we have segments, create a compound body to keep them together
+    if (segmentParts.length > 0) {
+      // Create a compound body from all segments
+      const compoundBody = Body.create({
+        parts: segmentParts,
+        frictionAir: 0.01,
+        friction: 0.3,
+        restitution: 0.2,
+        density: 0.001
+      });
+      
+      World.add(this.world, compoundBody);
+      this.lineSegments.push(compoundBody);
     }
   }
   
@@ -399,7 +415,8 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
         this.ctx.fillStyle = (body as any).render?.fillStyle || '#333';
         this.ctx.fill();
       } else {
-        // Draw polygon (rectangle or other shapes) with smooth edges
+        // Draw polygon (rectangle, compound body, or other shapes)
+        // For compound bodies, Matter.js merges all parts' vertices into body.vertices
         const vertices = body.vertices;
         if (vertices && vertices.length > 0) {
           this.ctx.beginPath();
@@ -408,7 +425,11 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
             this.ctx.lineTo(vertices[i].x - body.position.x, vertices[i].y - body.position.y);
           }
           this.ctx.closePath();
-          this.ctx.fillStyle = (body as any).render?.fillStyle || '#333';
+          // Use the first part's render style if available, or default
+          const fillStyle = (body as any).render?.fillStyle || 
+                           (body.parts && body.parts.length > 1 && body.parts[1]?.render?.fillStyle) || 
+                           '#333333';
+          this.ctx.fillStyle = fillStyle;
           this.ctx.fill();
         }
       }
