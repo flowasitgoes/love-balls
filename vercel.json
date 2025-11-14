@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "buildCommand": "cd draw-line-game && npm install && npm run build",
+  "outputDirectory": "draw-line-game/www",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+
