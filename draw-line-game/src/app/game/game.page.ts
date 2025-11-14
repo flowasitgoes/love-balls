@@ -290,16 +290,16 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
       // Connect this segment to the previous one if it exists
       if (newSegments.length > 1) {
         const prevSegment = newSegments[newSegments.length - 2];
-        const prevP1 = filteredPoints[newSegments.length - 2];
-        const prevP2 = filteredPoints[newSegments.length - 1];
+        const prevP1 = filteredPoints[i - 1];
+        const prevP2 = filteredPoints[i];
         const prevLength = Math.sqrt(
           Math.pow(prevP2.x - prevP1.x, 2) + 
           Math.pow(prevP2.y - prevP1.y, 2)
         );
-        const prevAngle = Math.atan2(prevP2.y - prevP1.y, prevP2.x - prevP1.x);
         
         // Calculate connection points in local coordinates
-        // Right end of previous segment (in its local space)
+        // Right end of previous segment (in its local space, rotated)
+        // Since the segment is rotated, in local space it's horizontal
         const prevEndX = prevLength / 2;
         const prevEndY = 0;
         
@@ -475,6 +475,12 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   restart(): void {
+    // Remove all line constraints
+    this.lineConstraints.forEach(constraint => {
+      World.remove(this.world, constraint);
+    });
+    this.lineConstraints = [];
+    
     // Remove all line segments
     this.lineSegments.forEach(segment => {
       World.remove(this.world, segment);
