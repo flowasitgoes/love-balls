@@ -5,10 +5,13 @@ ion-content {
   --padding-bottom: 0;
   --overflow: hidden;
   
-  // Ensure content fills the viewport
-  height: 100%;
+  // Ensure content fills the entire viewport (including under translucent header)
+  // Use 100vh to get full viewport height, not just available space
+  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .canvas-container {

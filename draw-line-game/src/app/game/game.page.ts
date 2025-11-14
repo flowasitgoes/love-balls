@@ -246,17 +246,43 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
       } : 'null'
     });
     
-    // Calculate available height (viewport minus header)
-    // Since header might be translucent, we can use slightly more height
-    // Reduce header height deduction by a small amount to maximize canvas space
-    const headerDeduction = Math.max(headerHeight - 4, 0); // Reduce by 4px to get more height
-    const availableHeight = viewportHeight - headerDeduction;
-    
-    // Use viewport width and calculated available height
+    // Try to get maximum available height
     let displayWidth = viewportWidth;
-    let displayHeight = availableHeight;
+    let displayHeight = 0;
     
-    // If calculated height is too small, use viewport height directly (header might be translucent)
+    // Priority 1: Use container height (canvas container, most accurate for canvas sizing)
+    // Container is inside ion-content and should fill the available space
+    if (containerRect && containerRect.height > 0) {
+      displayHeight = containerRect.height;
+      console.log('Using container height (canvas container):', displayHeight);
+    } 
+    // Priority 2: Use viewport height directly (full screen minus header)
+    // Since header might be translucent, we can use more space
+    else if (viewportHeight > 0) {
+      // Use viewport height directly, header is likely translucent
+      displayHeight = viewportHeight;
+      console.log('Using full viewport height:', displayHeight);
+    }
+    // Priority 3: Use ion-content height as fallback
+    else if (ionContentRect && ionContentRect.height > 0) {
+      displayHeight = ionContentRect.height;
+      console.log('Using ion-content height (fallback):', displayHeight);
+    }
+    // Priority 4: Calculate from viewport minus header
+    else {
+      const headerDeduction = Math.max(headerHeight - 12, 0);
+      displayHeight = viewportHeight - headerDeduction;
+      console.log('Using calculated height:', displayHeight);
+    }
+    
+    // If container height is less than viewport, prefer viewport (container might not be fully sized yet)
+    if (containerRect && containerRect.height > 0 && containerRect.height < viewportHeight * 0.95) {
+      // Container seems too small, use viewport instead
+      displayHeight = viewportHeight;
+      console.log('Container height too small, using viewport height:', displayHeight);
+    }
+    
+    // Final safety check
     if (displayHeight < 400) {
       displayHeight = viewportHeight;
       console.warn('Height too small, using full viewport height:', displayHeight);
@@ -265,7 +291,8 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     console.log('Canvas setup calculation:', {
       viewport: `${viewportWidth}x${viewportHeight}`,
       headerHeight: headerHeight,
-      availableHeight: availableHeight,
+      ionContentHeight: ionContentRect?.height || 'N/A',
+      containerHeight: containerRect?.height || 'N/A',
       finalWidth: displayWidth,
       finalHeight: displayHeight,
       heightRatio: (displayHeight / viewportHeight * 100).toFixed(1) + '%'
