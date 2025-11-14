@@ -1,9 +1,10 @@
-import { Component, OnInit, AfterViewInit, ViewChild, ElementRef, OnDestroy } from '@angular/core';
+import { Component, OnInit, AfterViewInit, ViewChild, ElementRef, OnDestroy, HostListener } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { LevelsService } from '../services/levels.service';
 import { ProgressService } from '../services/progress.service';
 import { Level } from '../models/level.model';
 import { Engine, World, Bodies, Body, Events, Composite } from 'matter-js';
+import { IonContent } from '@ionic/angular';
 
 interface Point {
   x: number;
@@ -18,6 +19,7 @@ interface Point {
 })
 export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('gameCanvas', { static: false }) canvasRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild(IonContent, { static: false }) content!: IonContent;
 
   level: Level | undefined;
   levelName: string = '';
@@ -76,20 +78,37 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     }
     this.ctx = context;
     
-    // Set canvas size (must be done after getting context)
-    this.setupCanvas();
-    
-    // Initialize physics engine
-    this.initPhysics();
-    
-    // Setup drawing
-    this.setupDrawing();
-    
-    // Setup collision detection
-    this.setupCollisionDetection();
-    
-    // Start render loop
-    this.startRenderLoop();
+    // Wait for content to be ready, then setup canvas
+    setTimeout(() => {
+      this.setupCanvas();
+      
+      // Initialize physics engine
+      this.initPhysics();
+      
+      // Setup drawing
+      this.setupDrawing();
+      
+      // Setup collision detection
+      this.setupCollisionDetection();
+      
+      // Start render loop
+      this.startRenderLoop();
+    }, 100);
+  }
+  
+  @HostListener('window:resize', ['$event'])
+  onResize() {
+    if (this.canvas && this.ctx) {
+      this.setupCanvas();
+      // Recalculate physics scale if needed
+      if (this.level) {
+        const scale = (this as any).scale;
+        if (scale) {
+          // Reinitialize physics with new scale
+          this.initPhysics();
+        }
+      }
+    }
   }
 
   ngOnDestroy() {
