@@ -78,36 +78,38 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
     }
     this.ctx = context;
     
-    // Wait for content to be ready, then setup canvas
-    setTimeout(() => {
-      this.setupCanvas();
-      
-      // Initialize physics engine
-      this.initPhysics();
-      
-      // Setup drawing
-      this.setupDrawing();
-      
-      // Setup collision detection
-      this.setupCollisionDetection();
-      
-      // Start render loop
-      this.startRenderLoop();
-    }, 100);
+    // Wait for content to be ready and layout to complete
+    // Use requestAnimationFrame to ensure DOM is fully rendered
+    requestAnimationFrame(() => {
+      // Double RAF to ensure layout is complete
+      requestAnimationFrame(() => {
+        this.setupCanvas();
+        
+        // Initialize physics engine
+        this.initPhysics();
+        
+        // Setup drawing
+        this.setupDrawing();
+        
+        // Setup collision detection
+        this.setupCollisionDetection();
+        
+        // Start render loop
+        this.startRenderLoop();
+      });
+    });
   }
   
   @HostListener('window:resize', ['$event'])
   onResize() {
-    if (this.canvas && this.ctx) {
-      this.setupCanvas();
-      // Recalculate physics scale if needed
-      if (this.level) {
-        const scale = (this as any).scale;
-        if (scale) {
-          // Reinitialize physics with new scale
-          this.initPhysics();
-        }
-      }
+    if (this.canvas && this.ctx && this.level) {
+      // Debounce resize to avoid too many updates
+      clearTimeout((this as any).resizeTimeout);
+      (this as any).resizeTimeout = setTimeout(() => {
+        this.setupCanvas();
+        // Reinitialize physics with new dimensions
+        this.initPhysics();
+      }, 100);
     }
   }
 
@@ -121,17 +123,37 @@ export class GamePage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private setupCanvas(): void {
-    // Use window dimensions, accounting for header
-    const headerHeight = 56; // Approximate Ionic header height
-    const displayWidth = window.innerWidth;
-    const displayHeight = window.innerHeight - headerHeight;
+    // Get actual container dimensions from ion-content
+    const container = this.canvas.parentElement;
+    if (!container) {
+      console.error('Canvas container not found');
+      return;
+    }
+    
+    // Get the actual visible dimensions of the container
+    const rect = container.getBoundingClientRect();
+    const displayWidth = rect.width;
+    const displayHeight = rect.height;
+    
+    // Fallback to window dimensions if container has no size
+    const finalWidth = displayWidth > 0 ? displayWidth : window.innerWidth;
+    const finalHeight = displayHeight > 0 ? displayHeight : window.innerHeight;
     
     // Set display size for high DPI screens
     const dpr = window.devicePixelRatio || 1;
-    this.canvas.style.width = displayWidth + 'px';
-    this.canvas.style.height = displayHeight + 'px';
-    this.canvas.width = displayWidth * dpr;
-    this.canvas.height = displayHeight * dpr;
+    
+    // Set canvas display size (CSS pixels)
+    this.canvas.style.width = finalWidth + 'px';
+    this.canvas.style.height = finalHeight + 'px';
+    
+    // Set canvas internal size (actual pixels)
+    this.canvas.width = finalWidth * dpr;
+    this.canvas.height = finalHeight * dpr;
+    
+    // Reset transform to prevent cumulative scaling
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    
+    // Apply DPR scale
     this.ctx.scale(dpr, dpr);
   }
 
